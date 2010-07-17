@@ -67,6 +67,24 @@ JINJA2_TEMPLATE_LOADERS setting directive::
 From now on, all of your views, generic views and error pages will be handled
 and rendered by Jinja2.
 
+Using the django rendering engine
+=================================
+
+If your project uses some applications which needs to original django
+templating engine to correctly render their templates, you can add their names
+to a JINJA2_DISABLED_APPS settings and coffin will render the templates using
+the django templating engine.
+
+If you use the built-in admin app, you have then to add the following setting::
+
+   JINJA2_DISABLED_APPS = (
+       'admin',
+   )
+   
+Please note coffin uses the folder root folder of the template to decide to
+which application it belongs (the django.contrib.admin application stores all
+its templates in the 'admin' subdirectory).
+
 Custom filters and extensions
 =============================
 
