@@ -50,27 +50,22 @@ templates.
 Rendering
 =========
 
-Simply use the ``render_to_response`` replacement provided by coffin::
+Change the TEMPLATE_LOADERS settings to contain only the following loader::
 
-    from coffin.shortcuts import render_to_response
-    render_to_response('template.html', {'var': 1})
+   TEMPLATE_LOADERS = (
+      'coffin.template.loaders.Loader',
+   )
 
-This will render ``template.html`` using Jinja2, and returns a
-``HttpResponse``.
+And move all previously defined template loaders to the
+JINJA2_TEMPLATE_LOADERS setting directive::
 
+   JINJA2_TEMPLATE_LOADERS = (
+       'django.template.loaders.app_directories.Loader',
+       'django.template.loaders.filesystem.Loader',
+   )
 
-404 and 500 handlers
-====================
-
-To have your HTTP 404 and 500 template rendered using Jinja, replace the
-line::
-
-    from django.conf.urls.defaults import *
-
-in your ``urls.py`` (it should be there by default), with::
-
-    from coffin.conf.urls.defaults import *
-
+From now on, all of your views, generic views and error pages will be handled
+and rendered by Jinja2.
 
 Custom filters and extensions
 =============================

@@ -1,5 +1,20 @@
-from jinja2 import loaders
+from jinja2 import loaders, TemplateNotFound
+from django.template.loader import BaseLoader
+from django.template import TemplateDoesNotExist
+from coffin.template.loader import get_template
 
+class Loader(BaseLoader):
+    """
+    A template loader to be used 
+    """
+    is_usable = True
+    
+    def load_template(self, template_name, template_dirs=None):
+        try:
+            template = get_template(template_name)
+        except TemplateNotFound:
+            raise TemplateDoesNotExist(template_name)
+        return template, template.filename
 
 def jinja_loader_from_django_loader(django_loader):
     """Attempts to make a conversion from the given Django loader to an
