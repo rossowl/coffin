@@ -52,6 +52,9 @@ def test_url():
         ('{% url urls_app.views.sum left=2*3,right=z()|length %}',
                 {'z':lambda: 'u'}, '/url_test/sum/6,1'),   # full expressive syntax
 
+	# regression: string view followed by a string argument works
+	('{% url "urls_app.views.sum" "1","2" %}', {}, '/url_test/sum/1,2'),
+
         # failures
         ('{% url %}', {}, TemplateSyntaxError),
         ('{% url 1,2,3 %}', {}, TemplateSyntaxError),
@@ -67,12 +70,25 @@ def test_url():
         ('{% url urls_app.views.index as url %}{{url}}', {}, '/url_test/'),
         ('{% url inexistent as url %}{{ url }}', {}, ''),    # no exception
     ):
+        print template, '==', expected_result
         try:
             actual_result = env.from_string(template).render(context)
         except Exception, e:
+            print '==> %s: (%s)' % (type(e), e)
             assert type(e) == expected_result
         else:
+            print '==> %s' % actual_result
             assert actual_result == expected_result
+
+
+def test_url_current_app():
+    """Test that the url can deal with the current_app context setting."""
+    from coffin.template.loader import get_template_from_string
+    from django.template import RequestContext
+    from django.http import HttpRequest
+    t = get_template_from_string('{% url testapp:the-index-view %}')
+    assert t.render(RequestContext(HttpRequest())) == '/app/one/'
+    assert t.render(RequestContext(HttpRequest(), current_app="two")) == '/app/two/'
 
 
 def test_with():

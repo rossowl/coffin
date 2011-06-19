@@ -8,29 +8,41 @@ from django.template import Template, Context, \
     TemplateSyntaxError as DjangoTemplateSyntaxError
 
 
+# TODO: It would be preferrable to split these tests into those checks
+# which actually test the Library object, and those which test the assembly
+# of the Environment instance. Testcode for the former could be written more
+# cleanly by creating the library instances within the test code and
+# registering them manually with the environment, rather than having to
+# place them in fake Django apps in completely different files to have
+# them loaded.
+# The tests for the compatibility layer could also be factored out.
+
+
 def test_nodes_and_extensions():
     """Test availability of registered nodes/extensions.
     """
     from coffin.common import env
 
-    # Jinja2 extensions, loaded from a Coffin library   
+    # Jinja2 extensions, loaded from a Coffin library
     assert env.from_string('a{% foo %}b').render() == 'a{foo}b'
+    assert env.from_string('a{% foo_ex %}b').render() == 'a{my_foo}b'
 
     # Django tags, loaded from a Coffin library
-    assert Template('{% load foo_tag %}a{% foo_coffin %}b').render({}) == 'a{foo}b'
+    assert Template('{% load foo_tag %}a{% foo_coffin %}b').render(Context()) == 'a{foo}b'
 
 
 def test_filters():
     """Test availability of registered filters.
     """
+    from coffin.common import env
+
     # Filter registered with a Coffin library is available in Django and Jinja2
     assert env.from_string('a{{ "b"|foo }}c').render() == 'a{foo}c'
     assert Template('{% load foo_filter %}a{{ "b"|foo }}c').render(Context()) == 'a{foo}c'
 
-    # Filter registered with a Django library is not available in Jinja2
+    # Filter registered with a Django library is also available in Jinja2
     Template('{% load foo_filter_django %}{{ "b"|foo_django }}').render(Context())
-    assert_raises(Jinja2TemplateAssertionError,
-                  env.from_string, 'a{{ "b"|foo_django }}c')
+    assert env.from_string('a{{ "b"|foo }}c').render() == 'a{foo}c'
 
     # Some filters, while registered with a Coffin library, are only
     # available in Jinja2:
@@ -49,6 +61,16 @@ def test_filters():
     # [bug] Jinja2-exclusivity caused the compatibility layer to be not
     # applied, causing for example safe strings to be escaped.
     assert env.from_string('{{ "><"|django_jinja_forced }}').render() == '><'
+
+
+def test_env_builtins_django():
+    """Test that when the environment is assembled, Django libraries which
+    are included in the list of builtins are properly supported.
+    """
+    from coffin.common import get_env
+    from coffin.template import add_to_builtins
+    add_to_builtins('apps.django_lib')
+    assert get_env().from_string('a{{ "b"|foo_django_builtin }}c').render() == 'a{foo}c'
 
 
 def test_filter_compat_safestrings():
@@ -98,5 +120,8 @@ def test_filter_compat_other():
 
     # [bug] @needs_autoescape also (still) works correctly in Django
     assert Template('{% load compat_filters %}{{ "b"|needing_autoescape }}').render(Context()) == 'True'
+
+    # The Django filters can handle "Undefined" values
+    assert env.from_string('{{ doesnotexist|django_raw_output }}').render() == ''
 
     # TODO: test @stringfilter

@@ -7,10 +7,41 @@ def r(s, context={}):
     return env.from_string(s).render(context)
 
 
+def test_django_builtins_available():
+    """Many filters have not been re-implemented specifically for
+    Coffin, but instead the Django version is used through an
+    interop-layer.
+
+    Make sure that those are properly made available in Jinja2.
+    """
+    from coffin.template import defaultfilters
+    assert not hasattr(defaultfilters, 'get_digit')  # has no port
+    assert r('{{ "23475"|get_digit("2") }}') == '7'
+    assert r('{{ unknown|get_digit("2") }}') == ''
+
+
+def test_jinja2_builtins():
+    """Ensure that the Jinja2 builtins are available, and take
+    precedence over the Django builtins (which we automatically convert
+    and install).
+    """
+    # Django's default filter only accepts one argument.
+    assert r('{{ unknown|default("2", True) }}') == '2'
+
+
 def test_url():
     # project name is optional
     assert r('{{ "urls_app.views.index"|url() }}') == '/url_test/'
     assert r('{{ "apps.urls_app.views.index"|url() }}') == '/url_test/'
+
+
+def test_default():
+    """We make the Jinja2 default filter behave like Django's without
+    arguments, but still support Jinja2 extended syntax.
+    """
+    assert r('{{ foo|default("default") }}') == 'default'
+    assert r('{{ foo|default("default") }}', {'foo': False}) == 'default'
+    assert r('{{ foo|default("default", False) }}', {'foo': False}) == 'False'
 
 
 def test_pluralize():
@@ -51,5 +82,3 @@ def test_date_stuff():
     for f in ('date', 'time', 'timesince', 'timeuntil'):
         assert r('a{{ d|%s }}b' % f) == 'ab'
         assert r('a{{ d|%s }}b' % f, {'d': None}) == 'ab'
-        # given an empty string though (wrong type), an error would be raced
-        assert_raises(Exception, env.from_string('a{{ d|%s }}b' % f).render, {'d': ''})

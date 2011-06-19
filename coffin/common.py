@@ -3,6 +3,8 @@ import warnings
 
 from django import dispatch
 from jinja2 import Environment, loaders
+from jinja2 import defaults as jinja2_defaults
+from coffin.template import Library as CoffinLibrary
 
 __all__ = ('env',)
 
@@ -15,19 +17,27 @@ class CoffinEnvironment(Environment):
         if not loader:
             loader = loaders.ChoiceLoader(self._get_loaders())
         all_ext = self._get_all_extensions()
-        
+
         extensions.extend(all_ext['extensions'])
-        super(CoffinEnvironment, self).__init__(extensions=extensions, loader=loader, **kwargs)
+        super(CoffinEnvironment, self).__init__(
+            extensions=extensions,
+            loader=loader,
+            **kwargs
+        )
+        # Note: all_ext already includes Jinja2's own builtins (with
+        # the proper priority), so we want to assign to these attributes.
+        self.filters = all_ext['filters'].copy()
         self.filters.update(filters)
-        self.filters.update(all_ext['filters'])
+        self.globals = all_ext['globals'].copy()
         self.globals.update(globals)
-        self.globals.update(all_ext['globals'])
+        self.tests = all_ext['tests'].copy()
         self.tests.update(tests)
-        self.tests.update(all_ext['tests'])
+        for key, value in all_ext['attrs'].items():
+            setattr(self, key, value)
 
         from coffin.template import Template as CoffinTemplate
         self.template_class = CoffinTemplate
-        
+
     def _get_loaders(self):
         """Tries to translate each template loader given in the Django settings
         (:mod:`django.settings`) to a similarly-behaving Jinja loader.
@@ -36,7 +46,7 @@ class CoffinEnvironment(Environment):
         settings.
         """
         loaders = []
-        
+
         from coffin.template.loaders import jinja_loader_from_django_loader
 
         from django.conf import settings
@@ -70,39 +80,64 @@ class CoffinEnvironment(Environment):
                 pass
             else:
                 for f in os.listdir(path):
-                    if f == '__init__.py':
+                    if f == '__init__.py' or f.startswith('.'):
                         continue
+
                     if f.endswith('.py'):
                         try:
                             # TODO: will need updating when #6587 lands
                             # libs.append(get_library(
                             #     "django.templatetags.%s" % os.path.splitext(f)[0]))
-                            libs.append(get_library(os.path.splitext(f)[0]))
-                            
+                            l = get_library(os.path.splitext(f)[0])
+                            libs.append(l)
+
                         except InvalidTemplateLibrary:
                             pass
         return libs
 
     def _get_all_extensions(self):
         from django.conf import settings
-        from coffin.template import builtins
+        from django.template import builtins as django_builtins
+        from coffin.template import builtins as coffin_builtins
         from django.core.urlresolvers import get_callable
 
-        extensions, filters, globals, tests = [], {}, {}, {}
-
-        # start with our builtins
-        for lib in builtins:
+        # Note that for extensions, the order in which we load the libraries
+        # is not maintained (https://github.com/mitsuhiko/jinja2/issues#issue/3).
+        # Extensions support priorities, which should be used instead.
+        extensions, filters, globals, tests, attrs = [], {}, {}, {}, {}
+        def _load_lib(lib):
+            if not isinstance(lib, CoffinLibrary):
+                # If this is only a standard Django library,
+                # convert it. This will ensure that Django
+                # filters in that library are converted and
+                # made available in Jinja.
+                lib = CoffinLibrary.from_django(lib)
             extensions.extend(getattr(lib, 'jinja2_extensions', []))
             filters.update(getattr(lib, 'jinja2_filters', {}))
             globals.update(getattr(lib, 'jinja2_globals', {}))
             tests.update(getattr(lib, 'jinja2_tests', {}))
+            attrs.update(getattr(lib, 'jinja2_environment_attrs', {}))
 
+        # Start with Django's builtins; this give's us all of Django's
+        # filters courtasy of our interop layer.
+        for lib in django_builtins:
+            _load_lib(lib)
+
+        # The stuff Jinja2 comes with by default should override Django.
+        filters.update(jinja2_defaults.DEFAULT_FILTERS)
+        tests.update(jinja2_defaults.DEFAULT_TESTS)
+        globals.update(jinja2_defaults.DEFAULT_NAMESPACE)
+
+        # Our own set of builtins are next, overwriting Jinja2's.
+        for lib in coffin_builtins:
+            _load_lib(lib)
+
+        # Optionally, include the i18n extension.
         if settings.USE_I18N:
             extensions.append(_JINJA_I18N_EXTENSION_NAME)
 
-        # add the globally defined extension list
+        # Next, add the globally defined extensions
         extensions.extend(list(getattr(settings, 'JINJA2_EXTENSIONS', [])))
-
         def from_setting(setting):
             retval = {}
             setting = getattr(settings, setting, {})
@@ -114,23 +149,21 @@ class CoffinEnvironment(Environment):
                     value = callable(value) and value or get_callable(value)
                     retval[value.__name__] = value
             return retval
-
         filters.update(from_setting('JINJA2_FILTERS'))
         globals.update(from_setting('JINJA2_GLOBALS'))
         tests.update(from_setting('JINJA2_TESTS'))
 
-        # add extensions defined in application's templatetag libraries
+        # Finally, add extensions defined in application's templatetag libraries
         for lib in self._get_templatelibs():
-            extensions.extend(getattr(lib, 'jinja2_extensions', []))
-            filters.update(getattr(lib, 'jinja2_filters', {}))
-            globals.update(getattr(lib, 'jinja2_globals', {}))
-            tests.update(getattr(lib, 'jinja2_tests', {}))
+            _load_lib(lib)
+            attrs.update(getattr(lib, 'jinja2_environment_attrs', {}))
 
         return dict(
             extensions=extensions,
             filters=filters,
             globals=globals,
             tests=tests,
+            attrs=attrs,
         )
 
 def get_env():

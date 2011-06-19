@@ -37,15 +37,30 @@ Django filters that are ported in Coffin:
 - truncatewords
 - truncatewords_html
 
+Note that for the most part, you can simply use filters written for Django
+directly in Coffin. For example, ``django.contrib.markup`` "just works" (tm).
+
 The template-related functionality of the following contrib modules has
 been ported in Coffin:
 
-- ``coffin.contrib.markup``
 - ``coffin.contrib.syndication``.
 
 Jinja 2's ``i18n`` extension is hooked up with Django, and a custom version
 of makemessages supports string extraction from both Jinja2 and Django
 templates.
+
+Autoescape
+==========
+
+When using Auto Escape you will notice that marking something as a
+Safestrings with Django will not affect the rendering in Jinja 2. To fix this
+you can monkeypatch Django to produce Jinja 2 compatible Safestrings::
+
+    '''Monkeypatch Django to mimic Jinja2 behaviour'''
+    from django.utils import safestring
+    if not hasattr(safestring, '__html__'):
+        safestring.SafeString.__html__ = lambda self: str(self)
+        safestring.SafeUnicode.__html__ = lambda self: unicode(self)
 
 Rendering
 =========
@@ -80,10 +95,24 @@ If you use the built-in admin app, you have then to add the following setting::
    JINJA2_DISABLED_APPS = (
        'admin',
    )
-   
+
 Please note coffin uses the folder root folder of the template to decide to
 which application it belongs (the django.contrib.admin application stores all
 its templates in the 'admin' subdirectory).
+
+
+404 and 500 handlers
+====================
+
+To have your HTTP 404 and 500 template rendered using Jinja, replace the
+line::
+
+    from django.conf.urls.defaults import *
+
+in your ``urls.py`` (it should be there by default), with::
+
+    from coffin.conf.urls.defaults import *
+
 
 Custom filters and extensions
 =============================
@@ -110,7 +139,7 @@ Example for a Jinja-enabled template library::
     register.object(my_function_name) # A global function/object
     register.test(my_test_name)       # A test function
 
-You may also define additional extensions, filters, tests, and globas via your ``settings.py``::
+You may also define additional extensions, filters, tests and globals via your ``settings.py``::
 
     JINJA2_FILTERS = (
         'path.to.myfilter',
@@ -122,6 +151,7 @@ You may also define additional extensions, filters, tests, and globas via your `
         'jinja2.ext.do',
     )
 
+
 Other things of note
 ====================
 
@@ -132,14 +162,6 @@ by backwards-compatibility  concerns. However, if you are converting your
 templates anyway, it might be a good opportunity for this change.
 
 (*) http://groups.google.com/group/django-developers/browse_thread/thread/f323338045ac2e5e
-
-Jinja2's ``TemplateSyntaxError`` (and potentially other exception types)
-are not compatible with Django's own template exceptions with respect to
-the TEMPLATE_DEBUG facility. If TEMPLATE_DEBUG is enabled and Jinja2 raises
-an exception, Django's error 500 page will sometimes not be able to handle
-it and crash. The solution is to disable the TEMPLATE_DEBUG setting in
-Django. See http://code.djangoproject.com/ticket/10216 for further
-information.
 
 ``coffin.template.loader`` is a port of ``django.template.loader`` and
 comes with a Jinja2-enabled version of ``get_template()``.
@@ -209,3 +231,4 @@ Running the tests
 Use the nose framework:
 
     http://somethingaboutorange.com/mrl/projects/nose/
+

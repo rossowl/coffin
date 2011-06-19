@@ -1,19 +1,20 @@
 from django.template import (
     Context as DjangoContext,
     add_to_builtins as django_add_to_builtins,
-    import_library)
+    import_library,
+)
 from jinja2 import Template as _Jinja2Template
 
 # Merge with ``django.template``.
 from django.template import __all__
 from django.template import *
+from django.test import signals
 
 # Override default library class with ours
 from library import *
 
-
 class Template(_Jinja2Template):
-    """Fixes the incompabilites between Jinja2's template class and
+    '''Fixes the incompabilites between Jinja2's template class and
     Django's.
 
     The end result should be a class that renders Jinja2 templates but
@@ -22,7 +23,7 @@ class Template(_Jinja2Template):
     This includes flattening a ``Context`` instance passed to render
     and making sure that this class will automatically use the global
     coffin environment.
-    """
+    '''
 
     def __new__(cls, template_string, origin=None, name=None):
         # We accept the "origin" and "name" arguments, but discard them
@@ -48,7 +49,13 @@ class Template(_Jinja2Template):
         else:
             context = dict_from_django_context(context)
         assert isinstance(context, dict)  # Required for **-operator.
+        # It'd be nice to move this only into the test env
+        signals.template_rendered.send(sender=self, template=self, context=Context(context))
         return super(Template, self).render(**context)
+
+    @property
+    def origin(self):
+        return Origin(self.filename)
 
 
 def dict_from_django_context(context):
@@ -58,6 +65,10 @@ def dict_from_django_context(context):
         return context
     else:
         dict_ = {}
+        # Jinja2 internally converts the context instance to a dictionary, thus
+        # we need to store the current_app attribute as a key/value pair.
+        dict_['_current_app'] = getattr(context, 'current_app', None)
+
         # Newest dicts are up front, so update from oldest to newest.
         for subcontext in reversed(list(context)):
             dict_.update(dict_from_django_context(subcontext))
@@ -91,3 +102,4 @@ def add_to_builtins(module_name):
 
 add_to_builtins('coffin.template.defaulttags')
 add_to_builtins('coffin.template.defaultfilters')
+
