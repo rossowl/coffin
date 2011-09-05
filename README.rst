@@ -65,13 +65,40 @@ you can monkeypatch Django to produce Jinja 2 compatible Safestrings::
 Rendering
 =========
 
-Simply use the ``render_to_response`` replacement provided by coffin::
+Change the TEMPLATE_LOADERS settings to contain only the following loader::
 
-    from coffin.shortcuts import render_to_response
-    render_to_response('template.html', {'var': 1})
+   TEMPLATE_LOADERS = (
+      'coffin.template.loaders.Loader',
+   )
 
-This will render ``template.html`` using Jinja2, and returns a
-``HttpResponse``.
+And move all previously defined template loaders to the
+JINJA2_TEMPLATE_LOADERS setting directive::
+
+   JINJA2_TEMPLATE_LOADERS = (
+       'django.template.loaders.app_directories.Loader',
+       'django.template.loaders.filesystem.Loader',
+   )
+
+From now on, all of your views, generic views and error pages will be handled
+and rendered by Jinja2.
+
+Using the django rendering engine
+=================================
+
+If your project uses some applications which needs to original django
+templating engine to correctly render their templates, you can add their names
+to a JINJA2_DISABLED_APPS settings and coffin will render the templates using
+the django templating engine.
+
+If you use the built-in admin app, you have then to add the following setting::
+
+   JINJA2_DISABLED_APPS = (
+       'admin',
+   )
+
+Please note coffin uses the folder root folder of the template to decide to
+which application it belongs (the django.contrib.admin application stores all
+its templates in the 'admin' subdirectory).
 
 
 404 and 500 handlers

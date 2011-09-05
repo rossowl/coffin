@@ -50,7 +50,7 @@ class CoffinEnvironment(Environment):
         from coffin.template.loaders import jinja_loader_from_django_loader
 
         from django.conf import settings
-        for loader in settings.TEMPLATE_LOADERS:
+        for loader in settings.JINJA2_TEMPLATE_LOADERS:
             if isinstance(loader, basestring):
                 loader_obj = jinja_loader_from_django_loader(loader)
                 if loader_obj:
@@ -171,27 +171,11 @@ def get_env():
     :return: A Jinja2 environment singleton.
     """
     from django.conf import settings
-
+    
     kwargs = {
         'autoescape': True,
     }
     kwargs.update(getattr(settings, 'JINJA2_ENVIRONMENT_OPTIONS', {}))
-
-    result = CoffinEnvironment(**kwargs)
-    # Hook Jinja's i18n extension up to Django's translation backend
-    # if i18n is enabled; note that we differ here from Django, in that
-    # Django always has it's i18n functionality available (that is, if
-    # enabled in a template via {% load %}), but uses a null backend if
-    # the USE_I18N setting is disabled. Jinja2 provides something similar
-    # (install_null_translations), but instead we are currently not
-    # enabling the extension at all when USE_I18N=False.
-    # While this is basically an incompatibility with Django, currently
-    # the i18n tags work completely differently anyway, so for now, I
-    # don't think it matters.
-    if settings.USE_I18N:
-        from django.utils import translation
-        result.install_gettext_translations(translation)
-
-    return result
+    return CoffinEnvironment(**kwargs)
 
 env = get_env()
