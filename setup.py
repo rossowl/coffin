@@ -10,7 +10,7 @@ setup(name='Coffin',
     maintainer_email='dcramer@gmail.com',
     url='http://github.com/coffin/coffin',
     packages=find_packages(),
-    #install_requires=['Jinja2', 'django>=1.2'],
+    install_requires=['Jinja2', 'django>=1.2'],
     classifiers=[
         "Framework :: Django",
         "Intended Audience :: Developers",
